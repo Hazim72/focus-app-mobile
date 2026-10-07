@@ -55,6 +55,36 @@ class BlockerChannel(private val context: Context) : MethodChannel.MethodCallHan
                 result.success(BlockingService.isRunning)
             }
 
+            "getPermissionsStatus" -> {
+                val status = mapOf(
+                    "usageAccess" to PermissionHelper.hasUsageStatsPermission(context),
+                    "overlay" to PermissionHelper.hasOverlayPermission(context),
+                    "notification" to PermissionHelper.hasNotificationPermission(context),
+                    "batteryOptimization" to PermissionHelper.isBatteryOptimizationIgnored(context)
+                )
+                result.success(status)
+            }
+
+            "requestUsageAccess" -> {
+                PermissionHelper.openUsageAccessSettings(context)
+                result.success(true)
+            }
+
+            "requestOverlay" -> {
+                PermissionHelper.openOverlaySettings(context)
+                result.success(true)
+            }
+
+            "requestNotification" -> {
+                PermissionHelper.openNotificationSettings(context)
+                result.success(true)
+            }
+
+            "requestBatteryOptimization" -> {
+                PermissionHelper.requestIgnoreBatteryOptimization(context)
+                result.success(true)
+            }
+
             "hasPermissions" -> {
                 val hasUsage = PermissionHelper.hasUsageStatsPermission(context)
                 val hasOverlay = PermissionHelper.hasOverlayPermission(context)

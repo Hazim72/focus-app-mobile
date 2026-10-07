@@ -60,6 +60,44 @@ class NativeBlockerService {
     }
   }
 
+  /// Returns detailed status for all 4 permissions.
+  Future<Map<String, bool>> getPermissionsStatus() async {
+    try {
+      final Map<dynamic, dynamic>? res =
+          await _channel.invokeMethod<Map<dynamic, dynamic>>('getPermissionsStatus');
+      if (res == null) return {};
+      return res.map((key, value) => MapEntry(key.toString(), value as bool));
+    } on PlatformException catch (e) {
+      // ignore: avoid_print
+      print('NativeBlockerService: getPermissionsStatus error: ${e.message}');
+      return {};
+    }
+  }
+
+  Future<void> requestUsageAccess() async {
+    try {
+      await _channel.invokeMethod('requestUsageAccess');
+    } catch (_) {}
+  }
+
+  Future<void> requestOverlay() async {
+    try {
+      await _channel.invokeMethod('requestOverlay');
+    } catch (_) {}
+  }
+
+  Future<void> requestNotification() async {
+    try {
+      await _channel.invokeMethod('requestNotification');
+    } catch (_) {}
+  }
+
+  Future<void> requestBatteryOptimization() async {
+    try {
+      await _channel.invokeMethod('requestBatteryOptimization');
+    } catch (_) {}
+  }
+
   /// Prompts the user with system settings to grant missing permissions.
   Future<void> requestPermissions() async {
     try {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -12,13 +13,14 @@ class SettingsScreen extends StatelessWidget {
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
-        children: const [
+        children: [
           Card(
             child: ListTile(
-              leading: Icon(Icons.shield_outlined, color: AppColors.primary),
-              title: Text('Permissions Status'),
-              subtitle: Text('Usage access, overlay, and notifications active'),
-              trailing: Icon(Icons.check_circle, color: AppColors.success),
+              onTap: () => context.push('/onboarding'),
+              leading: const Icon(Icons.shield_outlined, color: AppColors.primary),
+              title: const Text('Permissions & Setup'),
+              subtitle: const Text('Manage Usage Access, Overlay, Notifications & Battery'),
+              trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
             ),
           ),
           SizedBox(height: 12),
