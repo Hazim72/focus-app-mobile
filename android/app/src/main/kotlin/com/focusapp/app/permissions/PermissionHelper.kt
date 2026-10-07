@@ -3,6 +3,7 @@ package com.focusapp.app.permissions
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
@@ -36,6 +37,26 @@ object PermissionHelper {
      */
     fun openUsageAccessSettings(context: Context) {
         val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(intent)
+    }
+
+    /**
+     * Checks whether the user has granted SYSTEM_ALERT_WINDOW (Display over other apps) permission.
+     */
+    fun hasOverlayPermission(context: Context): Boolean {
+        return Settings.canDrawOverlays(context)
+    }
+
+    /**
+     * Opens the Android system settings page where the user can grant Overlay permission.
+     */
+    fun openOverlaySettings(context: Context) {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:${context.packageName}")
+        ).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         context.startActivity(intent)
