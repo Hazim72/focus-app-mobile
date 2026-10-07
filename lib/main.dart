@@ -1,121 +1,195 @@
 import 'package:flutter/material.dart';
+import 'data/services/native_blocker_service.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const FocusApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class FocusApp extends StatelessWidget {
+  const FocusApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Focus App',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF6366F1),
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const HomeScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _HomeScreenState extends State<HomeScreen> {
+  final NativeBlockerService _blockerService = NativeBlockerService();
+  bool _isSessionActive = false;
+  bool _hasPermissions = false;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  final List<String> _targetApps = [
+    'com.instagram.android',
+    'com.whatsapp',
+    'com.android.chrome',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStatus();
+  }
+
+  Future<void> _checkStatus() async {
+    final active = await _blockerService.isSessionActive();
+    final permissions = await _blockerService.hasPermissions();
+    if (mounted) {
+      setState(() {
+        _isSessionActive = active;
+        _hasPermissions = permissions;
+      });
+    }
+  }
+
+  Future<void> _startSession() async {
+    if (!_hasPermissions) {
+      await _blockerService.requestPermissions();
+      await _checkStatus();
+      return;
+    }
+
+    // Absolute end timestamp: 10 minutes from now
+    final endTime = DateTime.now().add(const Duration(minutes: 10));
+    final success = await _blockerService.startSession(
+      packages: _targetApps,
+      endTime: endTime,
+    );
+
+    if (success) {
+      setState(() => _isSessionActive = true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Focus session started! Target apps are now blocked.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopSession() async {
+    final success = await _blockerService.stopSession();
+    if (success) {
+      setState(() => _isSessionActive = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Focus session stopped. All apps unblocked!')),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('Focus App'),
+        centerTitle: true,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            // Status Card
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: _isSessionActive
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _isSessionActive ? const Color(0xFF6366F1) : Colors.grey.shade800,
+                  width: 2,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    _isSessionActive ? Icons.lock : Icons.lock_open,
+                    size: 64,
+                    color: _isSessionActive ? const Color(0xFF818CF8) : Colors.grey,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _isSessionActive ? 'Focus Session Active' : 'No Active Session',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _isSessionActive
+                        ? 'Instagram, WhatsApp, and Chrome are currently BLOCKED.'
+                        : 'Apps can be used normally.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey.shade400),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 40),
+
+            // Start Button
+            if (!_isSessionActive)
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: FilledButton.icon(
+                  onPressed: _startSession,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text(
+                    'Start 10-Minute Focus Session',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
+              ),
+
+            // Stop Button
+            if (_isSessionActive)
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: FilledButton.tonalIcon(
+                  onPressed: _stopSession,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.stop),
+                  label: const Text(
+                    'Stop Session (Unblock Apps)',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: _checkStatus,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Refresh Status'),
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }

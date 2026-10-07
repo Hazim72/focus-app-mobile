@@ -15,6 +15,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.focusapp.app.R
 
 class BlockingService : Service() {
 
@@ -24,6 +25,8 @@ class BlockingService : Service() {
         const val NOTIFICATION_ID = 1001
         const val ACTION_START = "com.focusapp.app.action.START"
         const val ACTION_STOP = "com.focusapp.app.action.STOP"
+        const val EXTRA_PACKAGES = "extra_packages"
+        const val EXTRA_END_TIME = "extra_end_time"
 
         var isRunning: Boolean = false
             private set
@@ -36,12 +39,12 @@ class BlockingService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private var isScreenInteractive = true
 
-    // Day 4 hardcoded list of test apps to block
-    private val blockedApps = setOf(
+    private var blockedApps: Set<String> = setOf(
         "com.instagram.android",
         "com.whatsapp",
         "com.android.chrome"
     )
+    private var sessionEndTimeEpochMs: Long = 0L
 
     private val pollingRunnable = object : Runnable {
         override fun run() {
@@ -89,11 +92,20 @@ class BlockingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             Log.d(TAG, "Stopping service via ACTION_STOP")
+            overlayManager.hideOverlay()
+            stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
 
-        Log.d(TAG, "Starting foreground service and polling loop")
+        val passedPackages = intent?.getStringArrayListExtra(EXTRA_PACKAGES)
+        if (!passedPackages.isNullOrEmpty()) {
+            blockedApps = passedPackages.toSet()
+        }
+
+        sessionEndTimeEpochMs = intent?.getLongExtra(EXTRA_END_TIME, 0L) ?: 0L
+
+        Log.d(TAG, "Starting foreground service: blocking $blockedApps until timestamp $sessionEndTimeEpochMs")
         val notification = buildForegroundNotification()
         startForeground(NOTIFICATION_ID, notification)
         isRunning = true
@@ -105,6 +117,15 @@ class BlockingService : Service() {
     }
 
     private fun checkForegroundApp() {
+        // If absolute session end time was specified and reached, stop the session
+        if (sessionEndTimeEpochMs > 0 && System.currentTimeMillis() >= sessionEndTimeEpochMs) {
+            Log.d(TAG, "Session expired (reached $sessionEndTimeEpochMs). Stopping blocking service.")
+            overlayManager.hideOverlay()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
+
         val currentApp = foregroundAppDetector.getForegroundAppPackage() ?: return
 
         if (blockedApps.contains(currentApp)) {
@@ -123,9 +144,10 @@ class BlockingService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Focus Service",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Shows ongoing focus blocking status"
+                setShowBadge(true)
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)
@@ -136,9 +158,10 @@ class BlockingService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Focus App is Active")
             .setContentText("Distractions are blocked in the background.")
-            .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
 
