@@ -6,11 +6,6 @@ import '../../../data/services/session_storage_service.dart';
 import '../../app_selection/state/app_selection_state.dart';
 import '../state/session_state.dart';
 
-final statsSummaryProvider = FutureProvider.autoDispose<Map<String, int>>((ref) async {
-  final storage = ref.watch(sessionStorageServiceProvider);
-  return storage.getStats();
-});
-
 class ActiveSessionScreen extends ConsumerWidget {
   const ActiveSessionScreen({super.key});
 
@@ -345,7 +340,7 @@ class ActiveSessionScreen extends ConsumerWidget {
     AppSelectionState appSelectionState,
   ) {
     final notifier = ref.read(sessionProvider.notifier);
-    final statsAsync = ref.watch(statsSummaryProvider);
+    final statsAsync = ref.watch(focusStatsProvider);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
@@ -388,6 +383,49 @@ class ActiveSessionScreen extends ConsumerWidget {
                   IconButton(
                     icon: const Icon(Icons.close_rounded, size: 18),
                     onPressed: () => notifier.acknowledgeCompleted(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Permissions Alert Banner if missing
+          if (!session.hasPermissions) ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 28),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Permissions Required',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Usage Access & Overlay permissions are needed to block apps.',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  FilledButton.tonal(
+                    onPressed: () => context.push('/onboarding'),
+                    child: const Text('Setup'),
                   ),
                 ],
               ),

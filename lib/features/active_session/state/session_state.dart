@@ -55,9 +55,11 @@ class SessionState {
 class SessionNotifier extends StateNotifier<SessionState> {
   final NativeBlockerService _service;
   final SessionStorageService _storage;
+  final Ref _ref;
   Timer? _tickerTimer;
 
-  SessionNotifier(this._service, this._storage) : super(const SessionState()) {
+  SessionNotifier(this._service, this._storage, this._ref)
+      : super(const SessionState()) {
     refresh();
   }
 
@@ -103,6 +105,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
         await _service.stopSession();
         await _storage.recordCompletedSession(stored.initialDurationMinutes);
         await _storage.clearActiveSession();
+        _ref.invalidate(focusStatsProvider);
 
         state = state.copyWith(
           isActive: false,
@@ -163,6 +166,23 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
   Future<bool> stopSession() async {
     _tickerTimer?.cancel();
+
+    // Calculate actual elapsed focus time
+    final now = DateTime.now();
+    final stored = await _storage.getActiveSession();
+    final effectiveStartTime = state.startTime ?? stored?.startTime;
+
+    if (effectiveStartTime != null) {
+      final elapsedSeconds = now.difference(effectiveStartTime).inSeconds;
+      // If user focused for at least 30 seconds, credit it to focus stats
+      if (elapsedSeconds >= 30) {
+        final elapsedMinutes = (elapsedSeconds / 60).round();
+        final minsToRecord = elapsedMinutes > 0 ? elapsedMinutes : 1;
+        await _storage.recordCompletedSession(minsToRecord);
+        _ref.invalidate(focusStatsProvider);
+      }
+    }
+
     final success = await _service.stopSession();
     await _storage.clearActiveSession();
 
@@ -217,6 +237,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     await _service.stopSession();
     await _storage.recordCompletedSession(state.initialDurationMinutes);
     await _storage.clearActiveSession();
+    _ref.invalidate(focusStatsProvider);
 
     state = state.copyWith(
       isActive: false,
@@ -231,5 +252,5 @@ final sessionProvider =
     StateNotifierProvider<SessionNotifier, SessionState>((ref) {
   final service = ref.watch(nativeBlockerServiceProvider);
   final storage = ref.watch(sessionStorageServiceProvider);
-  return SessionNotifier(service, storage);
+  return SessionNotifier(service, storage, ref);
 });

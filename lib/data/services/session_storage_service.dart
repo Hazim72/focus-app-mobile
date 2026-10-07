@@ -89,8 +89,19 @@ class SessionStorageService {
       'totalFocusMinutes': mins,
     };
   }
+
+  Future<void> resetStats() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyCompletedCount);
+    await prefs.remove(_keyTotalFocusMins);
+  }
 }
 
 final sessionStorageServiceProvider = Provider<SessionStorageService>((ref) {
   return SessionStorageService();
+});
+
+final focusStatsProvider = FutureProvider<Map<String, int>>((ref) async {
+  final storage = ref.watch(sessionStorageServiceProvider);
+  return storage.getStats();
 });
