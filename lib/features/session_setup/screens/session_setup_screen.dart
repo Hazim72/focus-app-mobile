@@ -19,6 +19,8 @@ class _SessionSetupScreenState extends ConsumerState<SessionSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appSelectionState = ref.watch(appSelectionProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Session Setup'),
@@ -63,6 +65,40 @@ class _SessionSetupScreenState extends ConsumerState<SessionSetupScreen> {
                     },
                   );
                 }).toList(),
+              ),
+
+              const SizedBox(height: 32),
+              const Text(
+                'Apps to Block',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Card(
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: AppColors.surfaceVariant,
+                    child: Icon(Icons.apps_rounded, color: AppColors.primary),
+                  ),
+                  title: Text(
+                    '${appSelectionState.selectedCount} apps selected',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  subtitle: Text(
+                    appSelectionState.selectedCount > 0
+                        ? 'Tap to customize blocked apps'
+                        : 'No apps selected! Tap to select.',
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                  onTap: () => context.push('/app-selection'),
+                ),
               ),
 
               const Spacer(),

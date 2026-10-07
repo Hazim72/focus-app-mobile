@@ -191,7 +191,7 @@ class _PermissionCard extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: isGranted
-                    ? AppColors.success.withOpacity(0.15)
+                    ? AppColors.success.withValues(alpha: 0.15)
                     : AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(12),
               ),

@@ -2,12 +2,21 @@ package com.focusapp.app.channel
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import com.focusapp.app.blocking.BlockingService
 import com.focusapp.app.permissions.PermissionHelper
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
+import kotlin.concurrent.thread
 
 class BlockerChannel(private val context: Context) : MethodChannel.MethodCallHandler {
 
@@ -100,7 +109,85 @@ class BlockerChannel(private val context: Context) : MethodChannel.MethodCallHan
                 result.success(true)
             }
 
+            "getInstalledApps" -> {
+                thread {
+                    try {
+                        val pm = context.packageManager
+                        val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
+                            addCategory(Intent.CATEGORY_LAUNCHER)
+                        }
+                        val resolveInfos = pm.queryIntentActivities(mainIntent, 0)
+                        val seenPackages = HashSet<String>()
+                        val appList = ArrayList<Map<String, Any?>>()
+
+                        for (info in resolveInfos) {
+                            val packageName = info.activityInfo.packageName ?: continue
+                            if (packageName == context.packageName) continue
+                            if (seenPackages.contains(packageName)) continue
+                            seenPackages.add(packageName)
+
+                            val appName = try {
+                                info.loadLabel(pm).toString()
+                            } catch (e: Exception) {
+                                packageName
+                            }
+
+                            val iconBytes = try {
+                                val drawable = info.loadIcon(pm)
+                                drawableToByteArray(drawable)
+                            } catch (e: Exception) {
+                                null
+                            }
+
+                            val isSystemApp = try {
+                                val appInfo = pm.getApplicationInfo(packageName, 0)
+                                (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                            } catch (e: Exception) {
+                                false
+                            }
+
+                            appList.add(
+                                mapOf(
+                                    "name" to appName,
+                                    "packageName" to packageName,
+                                    "icon" to iconBytes,
+                                    "isSystemApp" to isSystemApp
+                                )
+                            )
+                        }
+
+                        appList.sortBy { (it["name"] as? String)?.lowercase() ?: "" }
+
+                        Handler(Looper.getMainLooper()).post {
+                            result.success(appList)
+                        }
+                    } catch (e: Exception) {
+                        Handler(Looper.getMainLooper()).post {
+                            result.error("APP_LIST_ERROR", e.message, null)
+                        }
+                    }
+                }
+            }
+
             else -> result.notImplemented()
+        }
+    }
+
+    private fun drawableToByteArray(drawable: Drawable): ByteArray? {
+        return try {
+            val width = if (drawable.intrinsicWidth in 1..96) drawable.intrinsicWidth else 96
+            val height = if (drawable.intrinsicHeight in 1..96) drawable.intrinsicHeight else 96
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, canvas.width, canvas.height)
+            drawable.draw(canvas)
+            val stream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.PNG, 85, stream)
+            val bytes = stream.toByteArray()
+            bitmap.recycle()
+            bytes
+        } catch (t: Throwable) {
+            null
         }
     }
 }

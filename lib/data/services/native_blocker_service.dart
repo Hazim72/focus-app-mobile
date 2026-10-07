@@ -107,4 +107,18 @@ class NativeBlockerService {
       print('NativeBlockerService: requestPermissions error: ${e.message}');
     }
   }
+
+  /// Fetches all launchable installed apps on the device with icons and package details.
+  Future<List<Map<String, dynamic>>> getInstalledApps() async {
+    try {
+      final List<dynamic>? res =
+          await _channel.invokeMethod<List<dynamic>>('getInstalledApps');
+      if (res == null) return [];
+      return res.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+    } on PlatformException catch (e) {
+      // ignore: avoid_print
+      print('NativeBlockerService: getInstalledApps error: ${e.message}');
+      return [];
+    }
+  }
 }
