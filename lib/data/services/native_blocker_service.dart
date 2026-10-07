@@ -1,4 +1,9 @@
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final nativeBlockerServiceProvider = Provider<NativeBlockerService>((ref) {
+  return NativeBlockerService();
+});
 
 /// Single boundary service for Flutter to communicate with native Android blocking.
 class NativeBlockerService {
