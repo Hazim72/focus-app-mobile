@@ -92,20 +92,42 @@ class BlockingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             Log.d(TAG, "Stopping service via ACTION_STOP")
+            NativeSessionStorage.clearSession(this)
             overlayManager.hideOverlay()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
 
-        val passedPackages = intent?.getStringArrayListExtra(EXTRA_PACKAGES)
-        if (!passedPackages.isNullOrEmpty()) {
-            blockedApps = passedPackages.toSet()
+        if (intent != null) {
+            val passedPackages = intent.getStringArrayListExtra(EXTRA_PACKAGES)
+            if (!passedPackages.isNullOrEmpty()) {
+                blockedApps = passedPackages.toSet()
+            }
+
+            val passedEndTime = intent.getLongExtra(EXTRA_END_TIME, 0L)
+            if (passedEndTime > 0L) {
+                sessionEndTimeEpochMs = passedEndTime
+            }
+
+            // Save to native storage so the service can recover if Android kills the process
+            NativeSessionStorage.saveSession(this, blockedApps, sessionEndTimeEpochMs)
+            Log.d(TAG, "Started foreground service: blocking $blockedApps until timestamp $sessionEndTimeEpochMs (saved to native storage)")
+        } else {
+            // Android OS restarted the service (intent is null after process kill recovery)
+            Log.d(TAG, "BlockingService restarted by OS (START_STICKY recovery). Checking native storage...")
+            if (NativeSessionStorage.isSessionActive(this)) {
+                blockedApps = NativeSessionStorage.getBlockedPackages(this)
+                sessionEndTimeEpochMs = NativeSessionStorage.getEndTime(this)
+                Log.d(TAG, "Successfully recovered session from native storage: blocking $blockedApps until timestamp $sessionEndTimeEpochMs")
+            } else {
+                Log.d(TAG, "No active session in native storage or session expired. Stopping service.")
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return START_NOT_STICKY
+            }
         }
 
-        sessionEndTimeEpochMs = intent?.getLongExtra(EXTRA_END_TIME, 0L) ?: 0L
-
-        Log.d(TAG, "Starting foreground service: blocking $blockedApps until timestamp $sessionEndTimeEpochMs")
         val notification = buildForegroundNotification()
         startForeground(NOTIFICATION_ID, notification)
         isRunning = true
@@ -120,6 +142,7 @@ class BlockingService : Service() {
         // If absolute session end time was specified and reached, stop the session
         if (sessionEndTimeEpochMs > 0 && System.currentTimeMillis() >= sessionEndTimeEpochMs) {
             Log.d(TAG, "Session expired (reached $sessionEndTimeEpochMs). Stopping blocking service.")
+            NativeSessionStorage.clearSession(this)
             overlayManager.hideOverlay()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()

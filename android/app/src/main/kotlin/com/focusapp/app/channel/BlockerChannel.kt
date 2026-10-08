@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import com.focusapp.app.blocking.BlockingService
+import com.focusapp.app.blocking.NativeSessionStorage
 import com.focusapp.app.permissions.PermissionHelper
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
@@ -37,6 +38,9 @@ class BlockerChannel(private val context: Context) : MethodChannel.MethodCallHan
                 val packages = call.argument<List<String>>("packages") ?: emptyList()
                 val endTimeEpochMs = call.argument<Long>("endTimeEpochMs") ?: 0L
 
+                // Persist session to native SharedPreferences immediately
+                NativeSessionStorage.saveSession(context, packages.toSet(), endTimeEpochMs)
+
                 val intent = Intent(context, BlockingService::class.java).apply {
                     action = BlockingService.ACTION_START
                     putStringArrayListExtra(BlockingService.EXTRA_PACKAGES, ArrayList(packages))
@@ -53,6 +57,7 @@ class BlockerChannel(private val context: Context) : MethodChannel.MethodCallHan
             }
 
             "stopSession" -> {
+                NativeSessionStorage.clearSession(context)
                 val intent = Intent(context, BlockingService::class.java).apply {
                     action = BlockingService.ACTION_STOP
                 }
@@ -61,7 +66,23 @@ class BlockerChannel(private val context: Context) : MethodChannel.MethodCallHan
             }
 
             "isSessionActive" -> {
-                result.success(BlockingService.isRunning)
+                val isStorageActive = NativeSessionStorage.isSessionActive(context)
+                if (isStorageActive && !BlockingService.isRunning) {
+                    // Service was killed or phone restarted: auto-heal and restart service
+                    val packages = NativeSessionStorage.getBlockedPackages(context)
+                    val endTimeEpochMs = NativeSessionStorage.getEndTime(context)
+                    val intent = Intent(context, BlockingService::class.java).apply {
+                        action = BlockingService.ACTION_START
+                        putStringArrayListExtra(BlockingService.EXTRA_PACKAGES, ArrayList(packages))
+                        putExtra(BlockingService.EXTRA_END_TIME, endTimeEpochMs)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(intent)
+                    } else {
+                        context.startService(intent)
+                    }
+                }
+                result.success(isStorageActive || BlockingService.isRunning)
             }
 
             "getPermissionsStatus" -> {
