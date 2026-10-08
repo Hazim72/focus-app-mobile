@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import com.focusapp.app.blocking.BlockingService
 import com.focusapp.app.blocking.NativeSessionStorage
+import com.focusapp.app.blocking.WatchdogManager
 import com.focusapp.app.permissions.PermissionHelper
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
@@ -41,6 +42,9 @@ class BlockerChannel(private val context: Context) : MethodChannel.MethodCallHan
                 // Persist session to native SharedPreferences immediately
                 NativeSessionStorage.saveSession(context, packages.toSet(), endTimeEpochMs)
 
+                // Enqueue WorkManager watchdog to guard against process termination
+                WatchdogManager.startWatchdog(context)
+
                 val intent = Intent(context, BlockingService::class.java).apply {
                     action = BlockingService.ACTION_START
                     putStringArrayListExtra(BlockingService.EXTRA_PACKAGES, ArrayList(packages))
@@ -57,6 +61,7 @@ class BlockerChannel(private val context: Context) : MethodChannel.MethodCallHan
             }
 
             "stopSession" -> {
+                WatchdogManager.stopWatchdog(context)
                 NativeSessionStorage.clearSession(context)
                 val intent = Intent(context, BlockingService::class.java).apply {
                     action = BlockingService.ACTION_STOP

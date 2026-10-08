@@ -92,6 +92,7 @@ class BlockingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             Log.d(TAG, "Stopping service via ACTION_STOP")
+            WatchdogManager.stopWatchdog(this)
             NativeSessionStorage.clearSession(this)
             overlayManager.hideOverlay()
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -122,6 +123,7 @@ class BlockingService : Service() {
                 Log.d(TAG, "Successfully recovered session from native storage: blocking $blockedApps until timestamp $sessionEndTimeEpochMs")
             } else {
                 Log.d(TAG, "No active session in native storage or session expired. Stopping service.")
+                WatchdogManager.stopWatchdog(this)
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
@@ -131,6 +133,9 @@ class BlockingService : Service() {
         val notification = buildForegroundNotification()
         startForeground(NOTIFICATION_ID, notification)
         isRunning = true
+
+        // Ensure watchdog is monitoring this active session
+        WatchdogManager.startWatchdog(this)
 
         handler.removeCallbacks(pollingRunnable)
         handler.post(pollingRunnable)
@@ -142,6 +147,7 @@ class BlockingService : Service() {
         // If absolute session end time was specified and reached, stop the session
         if (sessionEndTimeEpochMs > 0 && System.currentTimeMillis() >= sessionEndTimeEpochMs) {
             Log.d(TAG, "Session expired (reached $sessionEndTimeEpochMs). Stopping blocking service.")
+            WatchdogManager.stopWatchdog(this)
             NativeSessionStorage.clearSession(this)
             overlayManager.hideOverlay()
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -188,6 +194,15 @@ class BlockingService : Service() {
             .build()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.d(TAG, "onTaskRemoved called (app swiped away from recents)")
+        if (NativeSessionStorage.isSessionActive(this)) {
+            Log.d(TAG, "Session is active. Scheduling immediate watchdog check to guarantee service survival.")
+            WatchdogManager.scheduleImmediateCheck(this, 1)
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "BlockingService destroyed")
@@ -199,6 +214,12 @@ class BlockingService : Service() {
         }
         overlayManager.hideOverlay()
         isRunning = false
+
+        // If killed unexpectedly while session is still supposed to be active, trigger watchdog
+        if (NativeSessionStorage.isSessionActive(this)) {
+            Log.w(TAG, "BlockingService destroyed while session was active! Scheduling immediate watchdog recovery.")
+            WatchdogManager.scheduleImmediateCheck(this, 1)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

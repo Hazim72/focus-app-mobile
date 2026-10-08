@@ -49,6 +49,7 @@ class BootReceiver : BroadcastReceiver() {
                         context.startService(serviceIntent)
                     }
                     Log.d(TAG, "Successfully requested BlockingService start after reboot")
+                    WatchdogManager.startWatchdog(context)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to start BlockingService on boot", e)
                 }
