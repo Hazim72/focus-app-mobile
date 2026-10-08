@@ -338,6 +338,7 @@ class _SessionConfirmScreenState extends ConsumerState<SessionConfirmScreen> {
                                   .startSession(
                                     packages: targetPackages,
                                     endTime: endTime,
+                                    initialDurationMinutes: widget.durationMinutes,
                                   );
 
                               if (!mounted) return;
